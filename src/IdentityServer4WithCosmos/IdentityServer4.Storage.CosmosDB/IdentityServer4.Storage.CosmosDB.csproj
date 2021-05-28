@@ -3,16 +3,19 @@
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <langVersion>Latest</langVersion>
-    <Version>0.0.0</Version>
-    <AssemblyVersion>0.0.0.0</AssemblyVersion>
-    <FileVersion>0.0.0.0</FileVersion>
-    <Company />
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company>Technovert</Company>
     <PackageProjectUrl>https://github.com/technovert/IdentityServer4.Storage.CosmosDB</PackageProjectUrl>
     <RepositoryUrl>https://github.com/technovert/IdentityServer4.Storage.CosmosDB</RepositoryUrl>
     <RepositoryType>GitHub</RepositoryType>
     <PackageTags>OAuth2,OpenID,Security,Identity,IdentityServer,CosmosDb</PackageTags>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <Description>A Cosmos Db Provider for Identity Server 4</Description>
+    <PackageId>Technovert.IdentityServer4.Storage.CosmosDB</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
