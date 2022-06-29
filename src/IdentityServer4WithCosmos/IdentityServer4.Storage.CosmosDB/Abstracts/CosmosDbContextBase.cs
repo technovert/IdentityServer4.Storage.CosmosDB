@@ -49,9 +49,9 @@ namespace IdentityServer4.Storage.CosmosDB.Abstracts
                 connectionPolicy = connectionPolicy ?? ConnectionPolicy.Default;
                // connectionPolicy.MaxConnectionLimit = int.MaxValue;
                 DocumentClient = new DocumentClient(serviceEndPoint, settings.Value.PrimaryKey, connectionPolicy);
-                EnsureDatabaseCreated(databaseName);
             }
-            
+            EnsureDatabaseCreated(databaseName);
+
         }
 
         /// <summary>
