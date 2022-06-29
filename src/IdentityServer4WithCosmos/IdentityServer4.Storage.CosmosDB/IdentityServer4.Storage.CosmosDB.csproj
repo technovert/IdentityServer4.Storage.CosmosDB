@@ -14,7 +14,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
     <Description>A Cosmos Db Provider for Identity Server 4</Description>
-    <PackageId>Technovert.IdentityServer4.Storage.CosmosDB</PackageId>
+    <PackageId>Tech.IdentityServer4.Storage.CosmosDB</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 

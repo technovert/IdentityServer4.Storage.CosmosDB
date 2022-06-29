@@ -44,16 +44,20 @@ namespace IdentityServer4.Storage.CosmosDB.Abstracts
             var databaseName = settings.Value.DatabaseName ?? Constants.DatabaseName;
 
             var serviceEndPoint = new Uri(settings.Value.EndPointUrl);
-            DocumentClient = new DocumentClient(serviceEndPoint, settings.Value.PrimaryKey,
-                connectionPolicy ?? ConnectionPolicy.Default);
-
-            EnsureDatabaseCreated(databaseName);
+            if (DocumentClient == null)
+            {
+                connectionPolicy = connectionPolicy ?? ConnectionPolicy.Default;
+               // connectionPolicy.MaxConnectionLimit = int.MaxValue;
+                DocumentClient = new DocumentClient(serviceEndPoint, settings.Value.PrimaryKey, connectionPolicy);
+                EnsureDatabaseCreated(databaseName);
+            }
+            
         }
 
         /// <summary>
         ///     CosmosDb Document Client.
         /// </summary>
-        protected DocumentClient DocumentClient { get; }
+        protected static DocumentClient DocumentClient { get; set; }
 
         /// <summary>
         ///     Instance of CosmosDb Database.
