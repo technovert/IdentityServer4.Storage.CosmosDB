@@ -3,8 +3,7 @@ using System.Linq;
 using System.Net;
 using IdentityServer4.Storage.CosmosDB.Configuration;
 using IdentityServer4.Storage.CosmosDB.Extensions;
-using Microsoft.Azure.Documents;
-using Microsoft.Azure.Documents.Client;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -29,10 +28,10 @@ namespace IdentityServer4.Storage.CosmosDB.Abstracts
         ///     Protected Constructor
         /// </summary>
         /// <param name="settings"></param>
-        /// <param name="connectionPolicy"></param>
+        /// <param name="clientOptions"></param>
         /// <param name="logger"></param>
         protected CosmosDbContextBase(IOptions<CosmosDbConfiguration> settings,
-            ConnectionPolicy connectionPolicy = null,
+            CosmosClientOptions clientOptions = null,
             ILogger logger = null)
         {
             Guard.ForNullOrDefault(settings.Value, nameof(settings));
@@ -43,12 +42,9 @@ namespace IdentityServer4.Storage.CosmosDB.Abstracts
 
             var databaseName = settings.Value.DatabaseName ?? Constants.DatabaseName;
 
-            var serviceEndPoint = new Uri(settings.Value.EndPointUrl);
-            if (DocumentClient == null)
+            if (CosmosClient == null)
             {
-                connectionPolicy = connectionPolicy ?? ConnectionPolicy.Default;
-               // connectionPolicy.MaxConnectionLimit = int.MaxValue;
-                DocumentClient = new DocumentClient(serviceEndPoint, settings.Value.PrimaryKey, connectionPolicy);
+                CosmosClient = new CosmosClient($"AccountEndpoint={settings.Value.EndPointUrl};AccountKey={settings.Value.PrimaryKey};", clientOptions);
             }
             EnsureDatabaseCreated(databaseName);
 
@@ -57,7 +53,7 @@ namespace IdentityServer4.Storage.CosmosDB.Abstracts
         /// <summary>
         ///     CosmosDb Document Client.
         /// </summary>
-        protected static DocumentClient DocumentClient { get; set; }
+        protected static CosmosClient CosmosClient { get; set; }
 
         /// <summary>
         ///     Instance of CosmosDb Database.
@@ -93,16 +89,13 @@ namespace IdentityServer4.Storage.CosmosDB.Abstracts
         {
             var dbNameToUse = Configuration.DatabaseName.GetValueOrDefault(databaseName);
 
-            DatabaseUri = UriFactory.CreateDatabaseUri(dbNameToUse);
-            Logger?.LogDebug($"Database URI: {DatabaseUri}");
-            Database = new Database {Id = databaseName};
-            Logger?.LogDebug($"Database: {Database}");
+            Logger?.LogDebug($"Database Name: {dbNameToUse}");
 
-            Logger?.LogDebug($"Ensuring `{Database.Id}` exists...");
-            var result = DocumentClient.CreateDatabaseIfNotExistsAsync(Database).Result;
-            Logger?.LogDebug($"{Database.Id} Creation Results: {result.StatusCode}");
+            Logger?.LogDebug($"Ensuring `{dbNameToUse}` exists...");
+            var result = CosmosClient.CreateDatabaseIfNotExistsAsync(dbNameToUse).Result;
+            Logger?.LogDebug($"{result.Database.Id} Creation Results: {result.StatusCode}");
             if (result.StatusCode.EqualsOne(HttpStatusCode.Created, HttpStatusCode.OK))
-                Database = result.Resource;
+                Database = result.Database;
         }
 
         /// <summary>

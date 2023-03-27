@@ -32,12 +32,20 @@
             public const string PersistedGrant = "PersistedGrants";
         }
 
-        public class CollectionPartitionKeys
+        public class CollectionPartitionKeyPaths
         {
             public const string IdentityResource = "/name";
             public const string ApiResource = "/name";
             public const string Client = "/clientId";
             public const string PersistedGrant = "/clientId";
+        }
+
+        public class CollectionPartitionKeys
+        {
+            public const string IdentityResource = "name";
+            public const string ApiResource = "name";
+            public const string Client = "clientId";
+            public const string PersistedGrant = "clientId";
         }
 
         public class Placeholders

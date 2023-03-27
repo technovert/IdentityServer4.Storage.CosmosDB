@@ -84,22 +84,30 @@ namespace SampleHost
 
         private static void EnsureSeedData(IConfigurationDbContext context)
         {
-            foreach (var client in IdentityServerResources.GetClients().ToList())
-            {
-                var dbRecords = context.Clients(client.ClientId).ToList();
-                if (dbRecords.Count == 0) context.AddClient(client.ToEntity());
+            var clientRecords = context.Clients().ToList();
+            if (clientRecords.Count == 0) {
+                foreach (var client in IdentityServerResources.GetClients().ToList())
+                {
+                    context.AddClient(client.ToEntity());
+                } 
             }
 
-            foreach (var resource in IdentityServerResources.GetIdentityResources().ToList())
+            var identityRecords = context.IdentityResources().ToList();
+            if (identityRecords.Count == 0)
             {
-                var dbRecords = context.IdentityResources(resource.Name).ToList();
-                if (dbRecords.Count == 0) context.AddIdentityResource(resource.ToEntity());
+                foreach (var resource in IdentityServerResources.GetIdentityResources().ToList())
+                {
+                    context.AddIdentityResource(resource.ToEntity());
+                }
             }
 
-            foreach (var resource in IdentityServerResources.GetApiResources().ToList())
+            var apiResources = context.ApiResources().ToList();
+            if (apiResources.Count == 0)
             {
-                var dbRecords = context.ApiResources(resource.Name).ToList();
-                if (dbRecords.Count == 0) context.AddApiResource(resource.ToEntity());
+                foreach (var resource in IdentityServerResources.GetApiResources().ToList())
+                {
+                    context.AddApiResource(resource.ToEntity());
+                }
             }
         }
     }
