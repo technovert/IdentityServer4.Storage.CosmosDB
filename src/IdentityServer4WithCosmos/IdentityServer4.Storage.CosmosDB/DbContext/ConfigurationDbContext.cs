@@ -7,8 +7,7 @@ using IdentityServer4.Storage.CosmosDB.Configuration;
 using IdentityServer4.Storage.CosmosDB.Entities;
 using IdentityServer4.Storage.CosmosDB.Extensions;
 using IdentityServer4.Storage.CosmosDB.Interfaces;
-using Microsoft.Azure.Documents;
-using Microsoft.Azure.Documents.Client;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -20,23 +19,20 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
     /// </summary>
     public class ConfigurationDbContext : CosmosDbContextBase, IConfigurationDbContext
     {
-        private DocumentCollection _apiResources;
-        private Uri _apiResourcesUri;
-        private DocumentCollection _clients;
-        private Uri _clientUri;
-        private DocumentCollection _identityResources;
-        private Uri _identityResourcesUri;
+        private Container _apiResources;
+        private Container _clients;
+        private Container _identityResources;
 
         /// <summary>
         ///     Create an instance of the ConfigurationDbContext Class.
         /// </summary>
         /// <param name="settings"></param>
-        /// <param name="connectionPolicy"></param>
+        /// <param name="clientOptions"></param>
         /// <param name="logger"></param>
         public ConfigurationDbContext(IOptions<CosmosDbConfiguration> settings,
-            ConnectionPolicy connectionPolicy = null,
+            CosmosClientOptions clientOptions = null,
             ILogger<ConfigurationDbContext> logger = null)
-            : base(settings, connectionPolicy, logger)
+            : base(settings, clientOptions, logger)
         {
             Guard.ForNullOrDefault(settings.Value, nameof(settings));
             EnsureClientsCollectionCreated().Wait();
@@ -51,7 +47,8 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
         /// <returns></returns>
         public async Task AddClient(Client entity)
         {
-            await DocumentClient.CreateDocumentAsync(_clientUri, entity);
+            entity.Id = Guid.NewGuid().ToString();
+            await _clients.CreateItemAsync(entity);
         }
 
         /// <summary>
@@ -61,7 +58,8 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
         /// <returns></returns>
         public async Task AddIdentityResource(IdentityResource entity)
         {
-            await DocumentClient.CreateDocumentAsync(_identityResourcesUri, entity);
+            entity.Id = Guid.NewGuid().ToString();
+            await _identityResources.CreateItemAsync(entity);
         }
 
         /// <summary>
@@ -71,7 +69,8 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
         /// <returns></returns>
         public async Task AddApiResource(ApiResource entity)
         {
-            await DocumentClient.CreateDocumentAsync(_apiResourcesUri, entity);
+            entity.Id = Guid.NewGuid().ToString();
+            await _apiResources.CreateItemAsync(entity);
         }
 
         /// <summary>
@@ -80,10 +79,8 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
         public IQueryable<IdentityResource> IdentityResources(string partitionKey = "")
         {
             return string.IsNullOrWhiteSpace(partitionKey)
-                ? DocumentClient.CreateDocumentQuery<IdentityResource>(_identityResourcesUri,
-                    new FeedOptions {EnableCrossPartitionQuery = true})
-                : DocumentClient.CreateDocumentQuery<IdentityResource>(_identityResourcesUri,
-                    new FeedOptions {PartitionKey = new PartitionKey(partitionKey)});
+              ? _identityResources.GetItemLinqQueryable<IdentityResource>(allowSynchronousQueryExecution: true)
+              : _identityResources.GetItemLinqQueryable<IdentityResource>(allowSynchronousQueryExecution: true, requestOptions: new QueryRequestOptions() { PartitionKey = new PartitionKey(partitionKey) });
         }
 
         /// <summary>
@@ -92,10 +89,8 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
         public IQueryable<ApiResource> ApiResources(string partitionKey = "")
         {
             return string.IsNullOrWhiteSpace(partitionKey)
-                ? DocumentClient.CreateDocumentQuery<ApiResource>(_apiResourcesUri,
-                    new FeedOptions {EnableCrossPartitionQuery = true})
-                : DocumentClient.CreateDocumentQuery<ApiResource>(_apiResourcesUri,
-                    new FeedOptions {PartitionKey = new PartitionKey(partitionKey)});
+               ? _apiResources.GetItemLinqQueryable<ApiResource>(allowSynchronousQueryExecution: true)
+               : _apiResources.GetItemLinqQueryable<ApiResource>(allowSynchronousQueryExecution: true, requestOptions: new QueryRequestOptions() { PartitionKey = new PartitionKey(partitionKey) });
         }
 
         /// <summary>
@@ -104,21 +99,12 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
         public IQueryable<Client> Clients(string partitionKey = "")
         {
             return string.IsNullOrWhiteSpace(partitionKey)
-                ? DocumentClient.CreateDocumentQuery<Client>(_clientUri,
-                    new FeedOptions {EnableCrossPartitionQuery = true})
-                : DocumentClient.CreateDocumentQuery<Client>(_clientUri,
-                    new FeedOptions {PartitionKey = new PartitionKey(partitionKey)});
+                ? _clients.GetItemLinqQueryable<Client>(allowSynchronousQueryExecution: true)
+                : _clients.GetItemLinqQueryable<Client>(allowSynchronousQueryExecution: true, requestOptions: new QueryRequestOptions() { PartitionKey = new PartitionKey(partitionKey) });
         }
 
         private async Task EnsureClientsCollectionCreated()
         {
-            _clientUri = UriFactory.CreateDocumentCollectionUri(Database.Id, Constants.CollectionNames.Client);
-            Logger?.LogDebug($"Clients URI: {_clientUri}");
-
-            var partitionKeyDefinition = new PartitionKeyDefinition
-                {Paths = {Constants.CollectionPartitionKeys.Client}};
-            Logger?.LogDebug($"Client Partition Key: {partitionKeyDefinition}");
-
             var indexingPolicy = new IndexingPolicy
             {
                 Automatic = true,
@@ -126,37 +112,23 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
             };
             Logger?.LogDebug($"Clients Indexing Policy: {indexingPolicy}");
 
-            _clients = new DocumentCollection
+            var containerProperties = new ContainerProperties()
             {
                 Id = Constants.CollectionNames.Client,
-                PartitionKey = partitionKeyDefinition,
+                PartitionKeyPath = Constants.CollectionPartitionKeyPaths.Client,
                 IndexingPolicy = indexingPolicy
             };
-            Logger?.LogDebug($"Clients Collection: {_clients}");
+            Logger?.LogDebug($"Clients Collection: {containerProperties}");
 
-            Logger?.LogDebug($"Ensure Clients (ID:{_clients.Id}) collection exists...");
-            var clientsRequestOptions = new RequestOptions
-            {
-                OfferThroughput = GetRUsFor(CollectionName.Clients)
-            };
-            Logger?.LogDebug($"Clients Request Options: {clientsRequestOptions}");
-            var clientResults = await DocumentClient.CreateDocumentCollectionIfNotExistsAsync(DatabaseUri,
-                _clients, clientsRequestOptions);
-            Logger?.LogDebug($"{_clients.Id} Creation Results: {clientResults.StatusCode}");
+            Logger?.LogDebug($"Ensure Clients (ID:{containerProperties.Id}) collection exists...");
+            var clientResults = await this.Database.CreateContainerIfNotExistsAsync(containerProperties, GetRUsFor(CollectionName.Clients));
+            Logger?.LogDebug($"{clientResults.Container.Id} Creation Results: {clientResults.StatusCode}");
             if (clientResults.StatusCode.EqualsOne(HttpStatusCode.Created, HttpStatusCode.OK))
-                _clients = clientResults.Resource;
+                _clients = clientResults.Container;
         }
 
         private async Task EnsureIdentityResourcesCollectionCreated()
         {
-            _identityResourcesUri =
-                UriFactory.CreateDocumentCollectionUri(Database.Id, Constants.CollectionNames.IdentityResource);
-            Logger?.LogDebug($"Identity Resources URI: {_identityResourcesUri}");
-
-            var partitionKeyDefinition = new PartitionKeyDefinition
-                {Paths = {Constants.CollectionPartitionKeys.IdentityResource}};
-            Logger?.LogDebug($"Identity Resources Partition Key: {partitionKeyDefinition}");
-
             var indexingPolicy = new IndexingPolicy
             {
                 Automatic = true,
@@ -164,37 +136,23 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
             };
             Logger?.LogDebug($"Identity Resources Indexing Policy: {indexingPolicy}");
 
-            _identityResources = new DocumentCollection
+            var containerProperties = new ContainerProperties()
             {
                 Id = Constants.CollectionNames.IdentityResource,
-                PartitionKey = partitionKeyDefinition,
+                PartitionKeyPath = Constants.CollectionPartitionKeyPaths.IdentityResource,
                 IndexingPolicy = indexingPolicy
             };
-            Logger?.LogDebug($"Identity Resources Collection: {_identityResources}");
+            Logger?.LogDebug($"Identity Resources Collection: {containerProperties}");
 
-            Logger?.LogDebug($"Ensure Identity Resources (ID:{_identityResources.Id}) collection exists...");
-            var identityResourcesRequestOptions = new RequestOptions
-            {
-                OfferThroughput = GetRUsFor(CollectionName.IdentityResources)
-            };
-            Logger?.LogDebug($"Identity Resources Request Options: {identityResourcesRequestOptions}");
-            var identityResourceResults = await DocumentClient.CreateDocumentCollectionIfNotExistsAsync(DatabaseUri,
-                _identityResources, identityResourcesRequestOptions);
-            Logger?.LogDebug($"{_identityResources.Id} Creation Results: {identityResourceResults.StatusCode}");
-            if (identityResourceResults.StatusCode.EqualsOne(HttpStatusCode.Created, HttpStatusCode.OK))
-                _identityResources = identityResourceResults.Resource;
+            Logger?.LogDebug($"Ensure Identity Resources (ID:{containerProperties.Id}) collection exists...");
+            var clientResults = await this.Database.CreateContainerIfNotExistsAsync(containerProperties, GetRUsFor(CollectionName.IdentityResources));
+            Logger?.LogDebug($"{clientResults.Container.Id} Creation Results: {clientResults.StatusCode}");
+            if (clientResults.StatusCode.EqualsOne(HttpStatusCode.Created, HttpStatusCode.OK))
+                _identityResources = clientResults.Container;
         }
 
         private async Task EnsureApiResourcesCollectionCreated()
         {
-            _apiResourcesUri =
-                UriFactory.CreateDocumentCollectionUri(Database.Id, Constants.CollectionNames.ApiResource);
-            Logger?.LogDebug($"API Resources URI: {_apiResourcesUri}");
-
-            var partitionKeyDefinition = new PartitionKeyDefinition
-                {Paths = {Constants.CollectionPartitionKeys.ApiResource}};
-            Logger?.LogDebug($"API Resources Partition Key: {partitionKeyDefinition}");
-
             var indexingPolicy = new IndexingPolicy
             {
                 Automatic = true,
@@ -202,26 +160,19 @@ namespace IdentityServer4.Storage.CosmosDB.DbContext
             };
             Logger?.LogDebug($"API Resources Index Policy: {indexingPolicy}");
 
-            _apiResources = new DocumentCollection
+            var containerProperties = new ContainerProperties()
             {
                 Id = Constants.CollectionNames.ApiResource,
-                PartitionKey = partitionKeyDefinition,
+                PartitionKeyPath = Constants.CollectionPartitionKeyPaths.ApiResource,
                 IndexingPolicy = indexingPolicy
             };
-            Logger?.LogDebug($"API Resources Collection: {_apiResources}");
+            Logger?.LogDebug($"API Resources Collection: {containerProperties}");
 
-            var apiResourcesRequestOptions = new RequestOptions
-            {
-                OfferThroughput = GetRUsFor(CollectionName.ApiResources)
-            };
-            Logger?.LogDebug($"API Resources Request Options: {apiResourcesRequestOptions}");
-
-            Logger?.LogDebug($"Ensure API Resources (ID:{_apiResources.Id}) collection exists...");
-            var apiResourceResults = await DocumentClient.CreateDocumentCollectionIfNotExistsAsync(DatabaseUri,
-                _apiResources, apiResourcesRequestOptions);
-            Logger?.LogDebug($"{_apiResources.Id} Creation Results: {apiResourceResults.StatusCode}");
+            Logger?.LogDebug($"Ensure API Resources (ID:{containerProperties.Id}) collection exists...");
+            var apiResourceResults = await this.Database.CreateContainerIfNotExistsAsync(containerProperties, GetRUsFor(CollectionName.ApiResources));
+            Logger?.LogDebug($"{apiResourceResults.Container.Id} Creation Results: {apiResourceResults.StatusCode}");
             if (apiResourceResults.StatusCode.EqualsOne(HttpStatusCode.Created, HttpStatusCode.OK))
-                _apiResources = apiResourceResults.Resource;
+                _apiResources = apiResourceResults.Container;
         }
     }
 }

@@ -38,9 +38,9 @@ namespace IdentityServer4.Storage.CosmosDB.Stores
 
         public Task<Client> FindClientByIdAsync(string clientId)
         {
-            var clients = _context.Clients(clientId).ToList();
+            var clients = _context.Clients().ToList();
 
-            var model = clients?.FirstOrDefault().ToModel();
+            var model = clients?.FirstOrDefault(_ => _.ClientId.Equals(clientId)).ToModel();
 
             _logger.LogDebug($"{clientId} found in database: {model != null}");
 
